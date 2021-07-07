@@ -7,7 +7,7 @@ menu = "main"
 weight = -210
 +++
 
-My name is Pierce Bartine. I'm an SRE working in Palo Alto, California
+My name is Pierce Bartine - I'm an SRE working in Palo Alto, California
 for Salesforce. My goal is to become [good][2] at whatever currently has
 my attention; there are so many disparate bodies of knowledge out there
 that I can't help but want to [connect them][3]! Really, I just love
