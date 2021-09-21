@@ -1,0 +1,311 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Pierce Bartine's blog</title><link>https://pbar.me/</link><description>Recent content on Pierce Bartine's blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><copyright>© 2021 Pierce Bartine</copyright><lastBuildDate>Sun, 27 Jun 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://pbar.me/index.xml" rel="self" type="application/rss+xml"/><item><title>About</title><link>https://pbar.me/about/</link><pubDate>Fri, 18 Jan 2019 00:00:00 +0000</pubDate><guid>https://pbar.me/about/</guid><description>&lt;p>My name is Pierce Bartine. I&amp;rsquo;m an SRE working in Palo Alto, California
+for Salesforce. My goal is to become &lt;a href="https://intenseminimalism.com/2015/where-are-the-polymaths-hiding/"target="_blank" rel="noopener noreferrer">good&lt;/a>
+at whatever currently has
+my attention; there are so many disparate bodies of knowledge out there
+that I can&amp;rsquo;t help but want to &lt;a href="https://en.wikipedia.org/wiki/History_of_the_Actor_model#Relationship_to_physics"target="_blank" rel="noopener noreferrer">connect them&lt;/a>
+! Really, I just love
+learning, (&lt;a href="https://msdn.microsoft.com/en-us/library/dd357801.aspx"target="_blank" rel="noopener noreferrer">mostly&lt;/a>
+) regardless of the topic.&lt;/p>
+&lt;p>Though a chemical engineer on paper, exposure to Linux at an early
+age pretty much sealed my fate. I&amp;rsquo;m a loyal fan of the kernel, but I&amp;rsquo;ve
+been known to stray into the Apple orchard occasionally. Check out my
+&lt;a href="https://github.com/pbar1/dotfiles"target="_blank" rel="noopener noreferrer">dotfiles&lt;/a>
+and &lt;a href="https://github.com/pbar1/resume"target="_blank" rel="noopener noreferrer">resume&lt;/a>
+, they&amp;rsquo;re part of my everything-as-code
+initiative.&lt;/p>
+&lt;p>Outside of that, I&amp;rsquo;m a swimmer; visualizing swimming data sucked me
+into the coding world. I also like to float rivers and go &lt;a href="https://www.reddit.com/r/outside"target="_blank" rel="noopener noreferrer">exploring&lt;/a>
+.
+Mathematics interests me greatly; I find a sense of beauty in the raw
+idea-ness of pure math.&lt;/p>
+&lt;span class="image-container">&lt;span class="link" >&lt;a href="https://pbar.me/images/primfuji.png"
+target="_blank">&lt;img class="img" src="https://pbar.me/images/primfuji.png"
+alt="Primordial Mt. Fuji"/>&lt;/a>&lt;/span>&lt;span class="caption">
+&lt;p>Primordial Mt. Fuji, Yasuo Nomura, 2013&lt;/p>
+&lt;/span>
+&lt;/span></description></item><item><title>Debugging AirPods on Linux</title><link>https://pbar.me/posts/airpods-on-linux/</link><pubDate>Sun, 27 Jun 2021 00:00:00 +0000</pubDate><guid>https://pbar.me/posts/airpods-on-linux/</guid><description>&lt;p>Documenting the process I used to get Bluetooth audio working on my Linux laptop. You&amp;rsquo;re welcome, future me.&lt;/p>
+&lt;h2 id="background">Background&lt;/h2>
+&lt;p>Let&amp;rsquo;s be honest - neither Bluetooth nor audio has ever been &lt;em>easy&lt;/em> on Linux, at least in comparison to macOS or Windows. Most distros I&amp;rsquo;ve tried in the past have had pretty suspect support out of the box, which is why I was pleased when my new EndeavourOS install came up with audio working well. It also had the proprietary NVIDIA GPU driver installed, which itself also usually provides some extra fun - but everything was going to plan so far.&lt;/p>
+&lt;p>I also like to track my &lt;a href="https://github.com/pbar1/dotfiles"target="_blank" rel="noopener noreferrer">dotfiles via git&lt;/a>
+. Looking at that repo, you&amp;rsquo;ll notice that not much is in the root, but many things are in the &lt;code>.config/&lt;/code> directory. It may be a bit OCD of me, but I don&amp;rsquo;t like littering my home directory with &lt;code>.foo.conf&lt;/code>, &lt;code>.bar/&lt;/code>, and such. Many programs support reading and writing their config in a directory specified by &lt;code>XDG_CONFIG_HOME&lt;/code> (which defaults to &lt;code>~/.config&lt;/code>) by default and falling back to dotfiles in the home dir if that path doesn&amp;rsquo;t exist. I also use a Mac and thus these dotfiles on that machine. Awesomely, simply setting &lt;code>XDG_CONFIG_HOME&lt;/code> (and the rest of the XDG base dir environment variables) explicity in your shell is enough to get most programs to put config there, even on a Mac.&lt;/p>
+&lt;p>One of the first things I do when intalling a new distro is to clone my dotfiles into my new home dir; doing this gets me all of my config seen in that repo, part of which is &lt;code>~/.zshenv&lt;/code>. I use that file to set XDG base dir variables as mentioned. One of them is (was) &lt;code>XDG_RUNTIME_DIR&lt;/code>; more on this later.&lt;/p>
+&lt;p>Around the time of cloning my dotfiles, I also installed &lt;code>bbswitch&lt;/code> to swap between my laptop&amp;rsquo;s integrated GPU and NVIDIA GPU. I then restarted my machine. Once it came back on and I had logged in, &lt;em>changing sound volume no longer worked via keyboard sound keys&lt;/em>. Of course my first thought was the NVIDIA GPU did it, yours would be too :wink:.&lt;/p>
+&lt;p>I decided to just leave it be for a while, as sound itself actually still worked. Also, I never really used my AirPods with this machine because of the aforementioned Bluetooth issues in the past. Then a friend of mine asked if I&amp;rsquo;d tried using them, as he&amp;rsquo;s also an Arch-based user and had had some issues with using AirPods himself on Linux.&lt;/p>
+&lt;p>It was time to dive in!&lt;/p>
+&lt;h2 id="process">Process&lt;/h2>
+&lt;h3 id="fix-audio-controls">Fix audio controls&lt;/h3>
+&lt;p>First up - let&amp;rsquo;s get the audio controls back. As I mentioned, audio itself was still working. I opened the PulseAudio Volume Control GUI, and was met with a frozen window perpetually displaying &lt;code>Establishing connection to PulseAudio&lt;/code>. Seeing this told me the PulseAudio daemon was not running, so I confirmed this by first checking to see if there was even a &lt;code>pulseaudio&lt;/code> process running:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">pgrep pulseaudio
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Sure enough, there was not. I checked the service&amp;rsquo;s status in systemd:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">systemctl --user status pulseaudio
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>The PulseAudio service was inactive/dead, so I attempted to start it and check the logs:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">systemctl --user start pulseaudio
+journalctl --user -xeu pulseaudio
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>And was met with a crashing PulseAudio, but with the very obvious error:&lt;/p>
+&lt;pre tabindex="0">&lt;code>XDG_RUNTIME_DIR (/tmp) is not owned by us (uid 1000), but by uid 0! (This could e.g. happen if you try to connect to a non-root
+&lt;/code>&lt;/pre>&lt;p>&amp;hellip;yeah. I&amp;rsquo;d had &lt;code>XDG_RUNTIME_DIR&lt;/code> set to &lt;code>/tmp&lt;/code> via my &lt;code>.zshenv&lt;/code>. After some Googling on a more proper value to set for that variable, it seemed like the jury was still out, so I simply removed the explicit set from my &lt;code>.zshenv&lt;/code>. Log out and back in, and boom - the PulseAudio systemd service starts up like a charm.&lt;/p>
+&lt;h3 id="reenable-bluetooth">Reenable Bluetooth&lt;/h3>
+&lt;p>I then noticed that Bluetooth did not seem to be working; I opened up the Bluetooth settings pane and it was suspiciously blank, and there was also no KDE Plasma applet for Bluetooth in the menu bar. I&amp;rsquo;m still not quite sure why this was the case, but at some point in the past it seems that the Bluetooth systemd service was disabled. This was an easy fix:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">sudo systemctl &lt;span class="nb">enable&lt;/span> --now bluetooth
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>And Bluetooth returns.&lt;/p>
+&lt;h3 id="pair-airpods">Pair AirPods&lt;/h3>
+&lt;p>Attempting to pair the AirPods normally seemed to &lt;em>almost&lt;/em> work, but finishing the pairing process fails with &lt;code>Failed to connect&lt;/code> (or something similar). After some more searching I found &lt;a href="https://www.reddit.com/r/archlinux/comments/er9mb2/have_any_of_you_guys_tried_to_use_airpods/"target="_blank" rel="noopener noreferrer">this Reddit post&lt;/a>
+, and followed the steps that were shown.&lt;/p>
+&lt;blockquote>
+&lt;p>Edit &lt;code>/etc/bluetooth/main.conf&lt;/code> and change the &lt;code>ControllerMode&lt;/code> setting, like so:&lt;/p>
+&lt;pre tabindex="0">&lt;code>ControllerMode = bredr
+&lt;/code>&lt;/pre>&lt;/blockquote>
+&lt;p>Following that, I restarted Bluetooth:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">sudo systemctl restart bluetooth
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Retried pairing the AirPods, and it totally worked!&lt;/p>
+&lt;h3 id="coax-sound-out-of-the-airpods">Coax sound out of the AirPods&lt;/h3>
+&lt;p>Sound still was not able to be played using the AirPods though. It appeared I did not have PulseAudio Bluetooth support installed. After some investigation into &lt;em>PipeWire&lt;/em>, I tried replacing PulseAudio with it, as it has Bluetooth suport built in - this did not work, and I just reverted to PulseAudio. Maybe some other time in the future. For now, I simply installed &lt;code>pulseaudio-bluetooth&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">yay -S pulseaudio-bluetooth
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>The music starts, and the credits roll! ∎&lt;/p>
+&lt;h3 id="todo-airpods-as-a-headset-ie-use-the-mic">TODO: AirPods as a headset (ie, use the mic)&lt;/h3>
+&lt;p>Haven&amp;rsquo;t tried getting mic support working yet. If I do, I may update this section.&lt;/p>
+&lt;h2 id="appendix-current-system-info">Appendix: Current system info&lt;/h2>
+&lt;p>Current system info (via &lt;code>neofetch&lt;/code>):&lt;/p>
+&lt;pre tabindex="0">&lt;code> ./o. pierce@bobbery
+./sssso- --------------
+`:osssssss+- OS: EndeavourOS Linux x86_64
+`:+sssssssssso/. Host: Razer Blade Stealth 13 Late 2019 2.04
+`-/ossssssssssssso/. Kernel: 5.12.13-arch1-2
+`-/+sssssssssssssssso+:` Uptime: 24 mins
+`-:/+sssssssssssssssssso+/. Packages: 1131 (pacman)
+`.://osssssssssssssssssssso++- Shell: zsh 5.8
+.://+ssssssssssssssssssssssso++: Resolution: 3840x2160
+.:///ossssssssssssssssssssssssso++: DE: Plasma 5.22.2
+`:////ssssssssssssssssssssssssssso+++. WM: KWin
+`-////+ssssssssssssssssssssssssssso++++- WM Theme: Breeze
+`..-+oosssssssssssssssssssssssso+++++/` Theme: Breeze Dark [Plasma], Breeze [GTK2/3]
+./++++++++++++++++++++++++++++++/:. Icons: breeze-dark [Plasma], breeze-dark [GTK2/3]
+`:::::::::::::::::::::::::------`` Terminal: tmux
+CPU: Intel i7-1065G7 (8) @ 3.900GHz
+GPU: NVIDIA GeForce GTX 1650 Mobile / Max-Q
+GPU: Intel Iris Plus Graphics G7
+Memory: 4918MiB / 15821MiB
+&lt;/code>&lt;/pre></description></item><item><title>Docker Privileged Mode Semantics</title><link>https://pbar.me/posts/docker-privileged-mode-semantics/</link><pubDate>Mon, 20 Jul 2020 00:00:00 +0000</pubDate><guid>https://pbar.me/posts/docker-privileged-mode-semantics/</guid><description>&lt;h3 id="tldr">TL;DR&lt;/h3>
+&lt;ul>
+&lt;li>Grants the container the full set of possible Linux capabilities&lt;/li>
+&lt;li>Mounts all host devices to the container&lt;/li>
+&lt;li>Runs the container with unconfined AppArmor, seccomp, and SELinux profiles&lt;/li>
+&lt;li>Does not set process owner to root&lt;/li>
+&lt;/ul>
+&lt;h3 id="background">Background&lt;/h3>
+&lt;p>This is post is essentially a note to self and colleagues on the semantics of Docker&amp;rsquo;s &lt;em>privileged mode&lt;/em> option. Knowing clearly what this option implies is important when faced with an audit, as many software audits are designed to automatically red-flag containers that are run with this option. Although most enterprise applications should find privileged mode unnecessary, various open source tooling state a requirement for it, such as &lt;code>resize2fs&lt;/code> and Docker-in-Docker (which itself is almost certainly unnecessary). This post aims to show that feature parity can be accomplished via other exposed Docker features, namely &lt;code>--cap-add&lt;/code> and &lt;code>--devices&lt;/code>.&lt;/p>
+&lt;p>Investigation into this topic was spurred by the &lt;a href="https://github.com/zalando/postgres-operator"target="_blank" rel="noopener noreferrer">Zalando Postgres Operator&lt;/a>
+for Kubernetes. One of its components, Spilo, requires elevated privileges to resize AWS EBS devices automatically via &lt;code>resize2fs&lt;/code>.&lt;/p>
+&lt;p>The implications here are purely for Docker, which is an option (and as of this writing, the most prevalent option) for container runtime in Kubernetes. Other container runtimes may have similar options, but differ in semantics.&lt;/p>
+&lt;h3 id="privileged-mode-grants-all-linux-capabilities">Privileged mode grants all Linux capabilities&lt;/h3>
+&lt;p>&lt;em>Capabilities&lt;/em> are a feature in the Linux kernel that allow for finer-grained control over what a process can do. It is meant to be an alternative for providing a process with blanket root access if only a subset of privileges is required. &lt;a href="https://man7.org/linux/man-pages/man7/capabilities.7.html"target="_blank" rel="noopener noreferrer">A list of capabilities may be found here&lt;/a>
+.&lt;/p>
+&lt;p>Here is the relevant code snippet from Moby (Docker&amp;rsquo;s core), specifically &lt;a href="https://github.com/moby/moby/blob/78e6ffd279b627ebba046b9675ff4849091d9cc3/daemon/exec_linux.go#L25"target="_blank" rel="noopener noreferrer">exec_linux.go:25&lt;/a>
+:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go"> &lt;span class="k">if&lt;/span> &lt;span class="nx">ec&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Privileged&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="kc">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="o">&amp;amp;&lt;/span>&lt;span class="nx">specs&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">LinuxCapabilities&lt;/span>&lt;span class="p">{}&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Bounding&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nx">caps&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">GetAllCapabilities&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Permitted&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Bounding&lt;/span>
+&lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Inheritable&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Bounding&lt;/span>
+&lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Effective&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nx">p&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Capabilities&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Bounding&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>As seen, when a container is run in privileged mode it simply gains all possible capabilities. If the subset of these capabilities that the app needs is well known, privileged mode may be forgone and the relevant capabilities added with &lt;code>docker run --cap-add &amp;lt;EXAMPLE_CAP&amp;gt; ...&lt;/code>.&lt;/p>
+&lt;h3 id="privileged-mode-mounts-all-host-devices">Privileged mode mounts all host devices&lt;/h3>
+&lt;p>Privileged mode mounts all of the host&amp;rsquo;s &lt;code>/dev&lt;/code> devices within the container, as well as clears the &lt;code>/sys&lt;/code> mount&amp;rsquo;s read only flag.&lt;/p>
+&lt;p>Relevant snippet on mounting all devices, from Moby&amp;rsquo;s &lt;a href="https://github.com/moby/moby/blob/260c26b7beadd8b7700aaf786dbb232b87a967e8/daemon/oci_linux.go#L888"target="_blank" rel="noopener noreferrer">oci_linux.go:888&lt;/a>
+:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go"> &lt;span class="k">if&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">HostConfig&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Privileged&lt;/span> &lt;span class="o">&amp;amp;&amp;amp;&lt;/span> &lt;span class="p">!&lt;/span>&lt;span class="nx">sys&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">RunningInUserNS&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nx">hostDevices&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">err&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="nx">devices&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">HostDevices&lt;/span>&lt;span class="p">()&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="kc">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">return&lt;/span> &lt;span class="nx">err&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="k">for&lt;/span> &lt;span class="nx">_&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">d&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="k">range&lt;/span> &lt;span class="nx">hostDevices&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nx">devs&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nb">append&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">devs&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">oci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">Device&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">d&lt;/span>&lt;span class="p">))&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="c1">// adding device mappings in privileged containers
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="nx">_&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">deviceMapping&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="k">range&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">HostConfig&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Devices&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="c1">// issue a warning that custom cgroup permissions are ignored in privileged mode
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">CgroupPermissions&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="s">&amp;#34;rwm&amp;#34;&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nx">logrus&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">WithField&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;container&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">ID&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="nf">Warnf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;custom %s permissions for device %s are ignored in privileged mode&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">CgroupPermissions&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">PathOnHost&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="c1">// issue a warning that the device path already exists via /dev mounting in privileged mode
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">PathOnHost&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">PathInContainer&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nx">logrus&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">WithField&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;container&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">ID&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="nf">Warnf&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;path in container %s already exists in privileged mode&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">PathInContainer&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="k">continue&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="nx">d&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">_&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">err&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="nx">oci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">DevicesFromPath&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">PathOnHost&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">deviceMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">PathInContainer&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s">&amp;#34;rwm&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">err&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="kc">nil&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">return&lt;/span> &lt;span class="nx">err&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="nx">devs&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nb">append&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">devs&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">d&lt;/span>&lt;span class="o">...&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="nx">devPermissions&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="p">[]&lt;/span>&lt;span class="nx">specs&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">LinuxDeviceCgroup&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;span class="p">{&lt;/span>
+&lt;span class="nx">Allow&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="kc">true&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="nx">Access&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s">&amp;#34;rwm&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="p">},&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Relevant snippet on clearing &lt;code>/sys&lt;/code> read only, from Moby&amp;rsquo;s &lt;a href="https://github.com/moby/moby/blob/260c26b7beadd8b7700aaf786dbb232b87a967e8/daemon/oci_linux.go#L693"target="_blank" rel="noopener noreferrer">oci_linux.go:693&lt;/a>
+:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go"> &lt;span class="k">if&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">HostConfig&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Privileged&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="c1">// clear readonly for /sys
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">for&lt;/span> &lt;span class="nx">i&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="k">range&lt;/span> &lt;span class="nx">s&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Mounts&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">s&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Mounts&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nx">i&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="nx">Destination&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;/sys&amp;#34;&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nf">clearReadOnly&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="nx">s&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Mounts&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nx">i&lt;/span>&lt;span class="p">])&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="nx">s&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Linux&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">ReadonlyPaths&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="kc">nil&lt;/span>
+&lt;span class="nx">s&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Linux&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">MaskedPaths&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="kc">nil&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="c1">// TODO: until a kernel/mount solution exists for handling remount in a user namespace,
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="c1">// we must clear the readonly flag for the cgroups mount (@mrunalp concurs)
+&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="nx">uidMap&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="nx">daemon&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">idMapping&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">UIDs&lt;/span>&lt;span class="p">();&lt;/span> &lt;span class="nx">uidMap&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="kc">nil&lt;/span> &lt;span class="o">||&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">HostConfig&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Privileged&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">for&lt;/span> &lt;span class="nx">i&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">m&lt;/span> &lt;span class="o">:=&lt;/span> &lt;span class="k">range&lt;/span> &lt;span class="nx">s&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Mounts&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">m&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Type&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s">&amp;#34;cgroup&amp;#34;&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nf">clearReadOnly&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">&amp;amp;&lt;/span>&lt;span class="nx">s&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Mounts&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nx">i&lt;/span>&lt;span class="p">])&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="privileged-mode-runs-with-unconfined-apparmor-seccomp-and-selinux-profiles">Privileged mode runs with unconfined AppArmor, seccomp, and SELinux profiles&lt;/h3>
+&lt;p>AppArmor, seccomp, and SELinux are Linux kernel security modules that allow for even greater policy enforcement. This is a deep topic meriting its own discussion. For the scope of this writeup, all that needs to be understood is that privileged mode sets both AppArmor (if found) and seccomp to run with &lt;em>unconfined&lt;/em> (non-enforcing) policy, and disables SELinux security options.&lt;/p>
+&lt;p>Relevant code snippet for AppArmor, from Moby&amp;rsquo;s &lt;a href="https://github.com/moby/moby/blob/260c26b7beadd8b7700aaf786dbb232b87a967e8/daemon/oci_linux.go#L129"target="_blank" rel="noopener noreferrer">oci_linux.go:129&lt;/a>
+:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go">&lt;span class="c1">// WithApparmor sets the apparmor profile
+&lt;/span>&lt;span class="c1">&lt;/span>&lt;span class="kd">func&lt;/span> &lt;span class="nf">WithApparmor&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">container&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Container&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="nx">coci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">SpecOpts&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">return&lt;/span> &lt;span class="kd">func&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">ctx&lt;/span> &lt;span class="nx">context&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Context&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">_&lt;/span> &lt;span class="nx">coci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Client&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">_&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">containers&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Container&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">s&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">coci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Spec&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="kt">error&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">apparmor&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">IsEnabled&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="kd">var&lt;/span> &lt;span class="nx">appArmorProfile&lt;/span> &lt;span class="kt">string&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">AppArmorProfile&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="s">&amp;#34;&amp;#34;&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nx">appArmorProfile&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">AppArmorProfile&lt;/span>
+&lt;span class="p">}&lt;/span> &lt;span class="k">else&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">HostConfig&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Privileged&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nx">appArmorProfile&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nx">unconfinedAppArmorProfile&lt;/span>
+&lt;span class="p">}&lt;/span> &lt;span class="k">else&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="c1">// abbreviated...
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Relevant code snippet for seccomp, from Moby&amp;rsquo;s &lt;a href="https://github.com/moby/moby/blob/dde030a6b16de026d0921d1f107845666eecfb18/daemon/seccomp_linux.go#L25"target="_blank" rel="noopener noreferrer">seccomp_linux.go:25&lt;/a>
+:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go">&lt;span class="c1">// WithSeccomp sets the seccomp profile
+&lt;/span>&lt;span class="c1">&lt;/span>&lt;span class="kd">func&lt;/span> &lt;span class="nf">WithSeccomp&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">daemon&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">Daemon&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">c&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">container&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Container&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="nx">coci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">SpecOpts&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">return&lt;/span> &lt;span class="kd">func&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">ctx&lt;/span> &lt;span class="nx">context&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Context&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">_&lt;/span> &lt;span class="nx">coci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Client&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">_&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">containers&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Container&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">s&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">coci&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Spec&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="kt">error&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="kd">var&lt;/span> &lt;span class="nx">profile&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="nx">specs&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">LinuxSeccomp&lt;/span>
+&lt;span class="kd">var&lt;/span> &lt;span class="nx">err&lt;/span> &lt;span class="kt">error&lt;/span>
+&lt;span class="nx">c&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="nx">c&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">HostConfig&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">Privileged&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">return&lt;/span> &lt;span class="kc">nil&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="c1">// abbreviated...
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Relevant code snippet for SELinux, from Moby&amp;rsquo;s &lt;a href="https://github.com/zalando/postgres-operator"target="_blank" rel="noopener noreferrer">daemon/create.go:249&lt;/a>
+:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-go" data-lang="go"> &lt;span class="k">if&lt;/span> &lt;span class="nx">ipcMode&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">IsHost&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="o">||&lt;/span> &lt;span class="nx">pidMode&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">IsHost&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="o">||&lt;/span> &lt;span class="nx">privileged&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">return&lt;/span> &lt;span class="nf">toHostConfigSelinuxLabels&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">selinux&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nf">DisableSecOpt&lt;/span>&lt;span class="p">()),&lt;/span> &lt;span class="kc">nil&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="wrapping-up">Wrapping Up&lt;/h3>
+&lt;p>These are the full set of implications Docker&amp;rsquo;s privileged mode has as of the time of this writing. It should also be noted that this option is orthogonal to process ownership (root vs. non-root) and thus does not set user in any way.&lt;/p>
+&lt;p>Using this information, it is likely possible for applications with a stated requirement of privileged mode to actually run without it, and instead add the Linux capabilities and devices needed to operate with feature parity.&lt;/p></description></item><item><title>Security Groups in Terraform</title><link>https://pbar.me/posts/security-groups-in-terraform/</link><pubDate>Fri, 18 Jan 2019 00:00:00 +0000</pubDate><guid>https://pbar.me/posts/security-groups-in-terraform/</guid><description>&lt;p>Terraform is a great tool by Hashicorp that allows teams to keep track of their infrastructure&amp;rsquo;s state and manage it declaratively in code. One of its biggest use cases is in managing the ever-increasing amount of AWS resources, one of which is the bread and butter of cloud networking: the &lt;em>security group&lt;/em>.&lt;/p>
+&lt;p>Security groups in AWS are simply lists of rules (topping out at 50 rules per group) that can whitelist traffic according to port, CIDR block, and most interestingly other security groups' IDs. For example, one could envison an RDS cluster with a security group called &lt;code>rds-sg&lt;/code> attached to it, and an Autoscaling group with one called &lt;code>rds-client-sg&lt;/code> attached to it. In this scenario, &lt;code>rds-sg&lt;/code> has rules allowing traffic in from each client security group identified by their ID as opposed to CIDR block/IP range. This provides better observability when troubleshooting connectivity issues as well as flexibility when writing Terraform. Security groups are stateful, meaning that any traffic allowed in is also allowed back out.&lt;/p>
+&lt;p>When perusing the Terraform docs, one may notice that there are two ways to provision security group resources:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>aws_security_group&lt;/code> with rules defined inline&lt;/li>
+&lt;li>&lt;code>aws_security_group&lt;/code> + &lt;code>aws_security_group_rule&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>At first glance, these two look the same - not so. The key differene is that they &lt;em>cannot be used together&lt;/em>, ie. you can&amp;rsquo;t define rules inline &lt;em>and&lt;/em> with &lt;code>aws_security_group_rule&lt;/code>. If you do so, Terraform will continuously say that it has changes to make on &lt;code>terraform plan&lt;/code> and &lt;code>apply&lt;/code>, never to be satisfied. You have to either pick one or the other.&lt;/p>
+&lt;p>This is because when you define security group rules inline, you are in essence telling Terraform &amp;ldquo;I want you to take full ownership of the state of this security group&amp;rdquo;. Normally, this is preferrable behavior. If a rogue user goes off and manually modifies a security group that is managed by Terraform, then the next time a plan is run it will be caught and reverted to what is in the resource definition.&lt;/p>
+&lt;p>Sometimes, however, you have security groups that just can&amp;rsquo;t bend to this ideal. A prime example is when standing up an Elastic Kubernetes Service (EKS) cluster. The architecture boils down to this:&lt;/p>
+&lt;ul>
+&lt;li>EKS cluster, with a security group &lt;code>eks-cluster-sg&lt;/code>&lt;/li>
+&lt;li>Any number of EKS node pools, with security groups such as &lt;code>eks-node-general-sg&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>In order to build this architecture as extensible as possible, you end up with two Terraform modules: &lt;code>eks-cluster&lt;/code> and &lt;code>eks-node&lt;/code>. The EKS cluster must exist before the nodes because they need the cluster&amp;rsquo;s certificate authority data to authenticate. This in turn means that &lt;em>the cluster&amp;rsquo;s security group must exist before the nodes are created&lt;/em>. Do you see where this is going?&lt;/p>
+&lt;p>The cluster&amp;rsquo;s security group must allow egress/ingress to/from the node pools (&lt;code>general&lt;/code> from above), but such rules cannot be added inline at EKS cluster create time - the node pools do not exist yet. Thus, this rule creation must be defered to node pool create time! The workflow goes:&lt;/p>
+&lt;ul>
+&lt;li>Create EKS cluster and &lt;code>eks-cluster-sg&lt;/code> with no rules inline&lt;/li>
+&lt;li>Create node pool, passing in the ID of &lt;code>eks-cluster-sg&lt;/code> (hopefully exported by the &lt;code>eks-cluster&lt;/code> module)
+&lt;ul>
+&lt;li>Attach rules to &lt;code>eks-cluster-sg&lt;/code> allowing &lt;code>eks-node-general-sg&lt;/code> in and out&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>Repeat for each node pool&lt;/li>
+&lt;/ul>
+&lt;p>The code should look something like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-terraform" data-lang="terraform">&lt;span class="kr">module&lt;/span> &lt;span class="s2">&amp;#34;eks-cluster&amp;#34;&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="c1">
+&lt;/span>&lt;span class="c1"> # ...
+&lt;/span>&lt;span class="c1">&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;span class="kr">
+&lt;/span>&lt;span class="kr">module&lt;/span> &lt;span class="s2">&amp;#34;eks-node-general&amp;#34;&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="na">ca_data&lt;/span> = &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nb">module&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">eks&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">cluster&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">ca_data&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;span class="na">cluster_sg&lt;/span> = &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nb">module&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">eks&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="nx">cluster&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">cluster_sg&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="c1">
+&lt;/span>&lt;span class="c1"> # ...
+&lt;/span>&lt;span class="c1">&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>And you&amp;rsquo;ve got yourself a working EKS cluster with the minimum possible network traffic allowed. Although with a caveat: &lt;code>eks-cluster-sg&lt;/code> can be added to manually (such as in the AWS console by hand) and Terraform would be &lt;strong>none the wiser&lt;/strong>. So not really ideal.&lt;/p>
+&lt;p>TL;DR:
+Use &lt;code>aws_security_group&lt;/code> with inline rules. If you need to add rules asynchronously, then use &lt;code>aws_security_group_rule&lt;/code>.&lt;/p></description></item><item><title>On QBism</title><link>https://pbar.me/posts/on-qbism/</link><pubDate>Tue, 26 Jun 2018 00:00:00 +0000</pubDate><guid>https://pbar.me/posts/on-qbism/</guid><description>&lt;p>I recently had the pleasure of reading &lt;a href="http://www.hup.harvard.edu/catalog.php?isbn=9780674504646"target="_blank" rel="noopener noreferrer">&lt;em>QBism - The Future of Quantum Physics&lt;/em>&lt;/a>
+by Hans Christian von Bayer, after stumbling upon the topic through &lt;a href="https://www.wired.com/2015/06/private-view-quantum-reality/"target="_blank" rel="noopener noreferrer">this blog post by Wired&lt;/a>
+. Though I&amp;rsquo;ve taken to listening to audiobooks or reading on my iPad, Reading a physical copy of this book was quite enjoyable. I felt focused and undisturbed, and the weight of the hardcover binding gave me the feeling I was reading something real. As for the ideas contained within the little yellow book, Professor von Bayer&amp;rsquo;s style of writing is crisp and enjoyable. He does not delve into any math, instead opting to devote all of his inktime to the subjective interpretation of quantum theory. Needless to say, I really liked the book.&lt;/p>
+&lt;p>According to QBism (formerly known as Quantum Bayesianism), the wavefunction is not real. It exists in the mind of each and every observer, as opposed to &lt;em>out there in the world&lt;/em>. The wavefunction never physically collapses, but rather can be viewed as the moment in your mind when your belief about your surroundings changes. For those familiar with Schrödinger and his cat: the wavefunction does not insist that the poor cat is both dead and alive; it merely provides us with a &lt;a href="https://en.wikipedia.org/wiki/Prior_probability"target="_blank" rel="noopener noreferrer">prior&lt;/a>
+on what one might find were they to open the box.&lt;/p>
+&lt;blockquote>
+&lt;p>The map is not the territory.&lt;/p>
+&lt;/blockquote>
+&lt;p>However, the wavefunction&amp;rsquo;s unreality is not to say that the world is not real. One of the key insights of QBism is its delineation between &lt;strong>subject&lt;/strong> and &lt;strong>object&lt;/strong>, sharply illustrated by the above quote. The objective is everything that takes place outside of each of our minds, while the subjective is what happens inside the mind.&lt;/p>
+&lt;p>I find the QBist interpretation of quantum mechanics calming. On a personal level, it makes me feel important - like I&amp;rsquo;m in the driver&amp;rsquo;s seat instead of just a passenger.&lt;/p></description></item><item><title>On Logarithms</title><link>https://pbar.me/posts/on-logarithms/</link><pubDate>Tue, 17 Apr 2018 00:00:00 +0000</pubDate><guid>https://pbar.me/posts/on-logarithms/</guid><description>&lt;p>With the amount of math Euler created, he must&amp;rsquo;ve pulled a proportionately large number of late nights; I think it&amp;rsquo;s safe to say he would&amp;rsquo;ve been quite the Taco Bell conniseur. But that only begs the question&amp;hellip;what would his go-to order have been? That&amp;rsquo;s a &lt;a href="https://en.wikipedia.org/wiki/Millennium_Prize_Problems"target="_blank" rel="noopener noreferrer">tough one&lt;/a>
+.&lt;/p>
+&lt;p>Anyway, I was at Taco Bell with a good friend of mine when we got to talking about the beauty of the &lt;a href="https://en.wikipedia.org/wiki/Proof_of_the_Euler_product_formula_for_the_Riemann_zeta_function"target="_blank" rel="noopener noreferrer">Euler product formula&lt;/a>
+and its proof. It reads:&lt;/p>
+&lt;p>\[ \zeta(s) = \sum_{n=1}^\infty\frac{1}{n^s} = \prod\frac{1}{1-p^{-s}}, \forall p \in \mathbb{P} \]&lt;/p>
+&lt;p>An infinite sum over the naturals ends up equalling &lt;em>a product over the primes&lt;/em>&amp;hellip;it&amp;rsquo;s nerdy, but I get an adrenaline rush when thinking about that. And it&amp;rsquo;s actually quite simple. I won&amp;rsquo;t go into it much, as the Wikipedia article linked above does a great job at illustrating the proof. In short though, Euler takes the first element of the infinite series (excluding 1) and multiplies a copy of of the series by that element. He then subtracts the copy from the original, yielding a new series &lt;strong>sieved of all multiples of that element&lt;/strong>. Rinse and repeat this algorithm to generate the primes!&lt;/p>
+&lt;p>Then, the computer scientists in us revealed themselves:&lt;/p>
+&lt;ul>
+&lt;li>You know what would be more interesting: how many times would a number that&amp;rsquo;s already been exluded have been hit?&lt;/li>
+&lt;li>What do you think the runtime of that is?&lt;/li>
+&lt;/ul>
+&lt;p>In other words, mapping the natural numbers \( \to \) lists of their factors. After arguing over the superiority of the natural vs. binary logarithm, our intuitions told us the runtime was \( O(n\log{n}) \); however, we never proved that rigorously. Leave a comment if you&amp;rsquo;ve got one!&lt;/p>
+&lt;blockquote>
+&lt;p>Logarithm: the number of times you must divide a number by a base, until that number goes to 1&lt;/p>
+&lt;/blockquote>
+&lt;blockquote>
+&lt;p>For example: \( \log_2{8} = 3 \) is like \( 8/2/2/2 = 1 \)&lt;/p>
+&lt;/blockquote>
+&lt;p>Eventually I found myself researching &lt;a href="https://en.wikipedia.org/wiki/Complex_logarithm"target="_blank" rel="noopener noreferrer">complex logarithms&lt;/a>
+. For a complex number \( z = re^{i\theta} \), there are infinitely many outputs of \( \ln{z} \) that all differ by integer multiples of \( 2\pi i \), which gives the plot below a sort of &amp;ldquo;height&amp;rdquo;. In the complex domian, the logarithm looks much weirder than it does over the reals - it resembles a spiral staircase, like that one in Super Mario 64, except without the steps:&lt;/p>
+&lt;!-- TODO: interactive plot of 2D map of logarithm x vs base -->
+&lt;img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Riemann_surface_log.svg/791px-Riemann_surface_log.svg.png" alt="Complex logarithm" width="350">
+&lt;p>It was fun researching and learning about the complex logarithm; to know there is so much more hiding within such an elementary function is exciting. &lt;a href="https://en.wikipedia.org/wiki/Modular_form"target="_blank" rel="noopener noreferrer">What else could be hiding beneath the surface?&lt;/a>
+&lt;/p></description></item><item><title>Analyzing a Codebase</title><link>https://pbar.me/posts/analyzing-a-codebase/</link><pubDate>Tue, 31 Oct 2017 00:00:00 +0000</pubDate><guid>https://pbar.me/posts/analyzing-a-codebase/</guid><description>&lt;p>&lt;em>Originally posted for &lt;a href="https://www.clear-measure.com/"target="_blank" rel="noopener noreferrer">Clear Measure&lt;/a>
+&lt;/em>&lt;/p>
+&lt;p>Here at Clear Measure we are all about taking old software and making it new again. In doing that, we perform a lot of &lt;em>code refactoring&lt;/em> - restructuring old code without breaking its functionality. This could, in some cases, call for some large rewrites of legacy components that still have to play nice with the rest of the system.&lt;/p>
+&lt;p>But before diving into a project, it would be nice to have a plan of attack, wouldn&amp;rsquo;t it? This is where &lt;em>code metrics&lt;/em> come into play. Code metrics are quantitative measurements of a codebase that can provide insights into software architecture. This information can then be used for smart budget planning and allocation of resources. A popular code metric is &lt;em>lines of code&lt;/em>, or LOC for short. Naturally, codebases with more lines of code will turn into larger refactoring projects.&lt;/p>
+&lt;p>Another one of these code metrics is &lt;em>cyclomatic complexity&lt;/em> - the number of independent paths through the code. Roughly speaking, the number of paths through the code correspounds to the number of unit tests that the code needs. To calculate the cyclomatic complexity, most commercial programs require the .NET source code to be complied into an assembly.&lt;/p>
+&lt;p>When analyzing a codebase before beginning a refactoring project, many times the code cannot - for whatever reason - compile to an assembly. This could be because key pieces of the solution are broken or missing, and fixing or writing them from scratch at this stage in the project is out of scope. Wouldn&amp;rsquo;t it be nice if you could get a quick overview of the codebase from the source code only, no assembly required?&lt;/p>
+&lt;p>As we do a lot of refactoring at Clear Measure, automating the process of gathering these metrics means more productivity. The faster we can get a grasp on the code, the faster we can get to work on a solution! For this reason, I wrote a PowerShell script to analyze a repository of code for lines of code, cyclomatic complexity, and file type.&lt;/p>
+&lt;h3 id="lines-of-code">Lines of Code&lt;/h3>
+&lt;p>This is the easist measurement to perform on your code with PowerShell. For example, to enumerate and print out the lines of C# code across all files in a folder, the PowerShell script looks like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-powershell" data-lang="powershell">&lt;span class="nv">$loc&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="n">0&lt;/span>
+&lt;span class="nb">Get-ChildItem&lt;/span> &lt;span class="n">-Include&lt;/span> &lt;span class="s2">&amp;#34;*.cs&amp;#34;&lt;/span> &lt;span class="n">-Recurse&lt;/span> &lt;span class="p">|&lt;/span>
+&lt;span class="nb">ForEach-Object&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nv">$loc&lt;/span> &lt;span class="p">+=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nb">Get-Content&lt;/span> &lt;span class="nv">$_&lt;/span> &lt;span class="p">|&lt;/span> &lt;span class="nb">Measure-Object&lt;/span> &lt;span class="n">-Line&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="n">Lines&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="nb">Write-Host&lt;/span> &lt;span class="nv">$loc&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>This script drills down and finds all of the &lt;code>.cs&lt;/code> files in the current working directory recursively and aggregates their collective total number of lines. Of course, the &lt;code>.cs&lt;/code> may be substituted for the extension of any other type of source code, such as &lt;code>.py&lt;/code> for Python, &lt;code>.vb&lt;/code> for Visual Basic, and so on.&lt;/p>
+&lt;h3 id="cyclomatic-complexity">Cyclomatic Complexity&lt;/h3>
+&lt;p>A reasonable estimate of cyclomatic complexity can be obtained by counting up the total number of branching statements in the code. For C# code, the branching statements that count toward this total are as follows:&lt;/p>
+&lt;ul>
+&lt;li>if&lt;/li>
+&lt;li>for&lt;/li>
+&lt;li>foreach&lt;/li>
+&lt;li>while&lt;/li>
+&lt;li>catch&lt;/li>
+&lt;/ul>
+&lt;p>It is unnecessary to include &lt;code>else&lt;/code>, as it does not spawn a new branch, but rather follows the default path through the code. Using &lt;code>if&lt;/code> as an example, the PowerShell script looks like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-powershell" data-lang="powershell">&lt;span class="nv">$cyclo&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="n">0&lt;/span>
+&lt;span class="nb">Get-ChildItem&lt;/span> &lt;span class="n">-Include&lt;/span> &lt;span class="s2">&amp;#34;*.cs&amp;#34;&lt;/span> &lt;span class="n">-Recurse&lt;/span> &lt;span class="p">|&lt;/span>
+&lt;span class="nb">ForEach-Object&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nv">$cyclo&lt;/span> &lt;span class="p">+=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nb">Get-Content&lt;/span> &lt;span class="nv">$_&lt;/span> &lt;span class="p">|&lt;/span> &lt;span class="nb">Select-String&lt;/span> &lt;span class="n">-Pattern&lt;/span> &lt;span class="s2">&amp;#34; if(&amp;#34;&lt;/span> &lt;span class="n">-SimpleMatch&lt;/span> &lt;span class="n">-AllMatches&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="n">Count&lt;/span>
+&lt;span class="nv">$cyclo&lt;/span> &lt;span class="p">+=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nb">Get-Content&lt;/span> &lt;span class="nv">$_&lt;/span> &lt;span class="p">|&lt;/span> &lt;span class="nb">Select-String&lt;/span> &lt;span class="n">-Pattern&lt;/span> &lt;span class="s2">&amp;#34; if (&amp;#34;&lt;/span> &lt;span class="n">-SimpleMatch&lt;/span> &lt;span class="n">-AllMatches&lt;/span>&lt;span class="p">).&lt;/span>&lt;span class="n">Count&lt;/span>
+&lt;span class="c"># ...and so on for the rest of the branching statements&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="nb">Write-Host&lt;/span> &lt;span class="nv">$cyclo&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>This script works similarly to the the one for lines of code, with the key difference being that it increments a count every time it sees a branching statement in a &lt;code>.cs&lt;/code> file. To get the full cyclomatic complexity estimate, simply include lines for each of the remaining branching statements in the script.&lt;/p>
+&lt;h3 id="wrapping-up">Wrapping Up&lt;/h3>
+&lt;p>Lines of code and cyclomatic complexity are not the only metrics that can be collected using PowerShell. With a little imagination and patience, other measurements such as dependency analysis could be performed. This is because source code is simply text, which is easy to work with. So get out there and start scripting away!&lt;/p></description></item></channel></rss>

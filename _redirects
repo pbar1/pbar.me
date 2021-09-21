@@ -1,0 +1,7 @@
+# These rules will change if you change your site’s custom domains or HTTPS settings
+
+# Redirect domain aliases to primary domain
+# https://pbar.me/* https://bartine.dev/:splat 301!
+
+# Optional: Redirect default Netlify subdomain to primary domain
+# https://pbar.netlify.com/* https://pbar.me/:splat 301!
