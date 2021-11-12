@@ -1,0 +1,179 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=generator content="Hugo 0.89.2"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name=color-scheme content="light dark">
+<meta name=supported-color-schemes content="light dark"><title>Debugging a Slow DynamoDB Query&nbsp;&ndash;&nbsp;Pierce Bartine</title><link rel=stylesheet href=/css/core.min.04bd7f85226c3e2528f8b0e6425c2e8eff6509057bc001498770cbf8a98273ede220428112091bb11e533bf7d1c475a1.css integrity=sha384-BL1/hSJsPiUo+LDmQlwujv9lCQV7wAFJh3DL+KmCc+3iIEKBEgkbsR5TO/fRxHWh><meta name=twitter:card content="summary">
+<meta name=twitter:title content="Debugging a Slow DynamoDB Query"><body><section id=header>
+<div class="header wrap"><span class="header left-side"><a class="site home" href=/><img class="site logo" src=/img/favicon.png alt><span class="site name">Pierce Bartine</span></a></span>
+<span class="header right-side"><div class="nav wrap"><nav class=nav><a class="nav item" href=/tags/>Tags</a><a class="nav item" href=/about/>About</a></nav></div></span></div></section><section id=content><div class=article-container><section class="article header">
+<h1 class="article title">Debugging a Slow DynamoDB Query</h1><p class="article date">Fri, Nov 12, 2021<span class=reading-time> • 6 minutes to read</span></p></section><article class="article markdown-body"><p>Recently I was talking to a friend about a website that he&rsquo;s building. Without
+going into too much detail, his site consists of a Blazor frontend, an ASP.NET
+Core backend API, and AWS DynamoDB as the persistence layer. He mentioned to me
+that upon startup, the first few calls to one of his API endpoints ran
+unexpectedly slowly, which piqued my curiosity. We ended up going down the
+profiling rabbit hole and eventually figured it out.</p>
+<p>TLDR: Establishing a TCP connection takes a while.</p>
+<h2 id=background>Background</h2>
+<p>Here&rsquo;s an excerpt from the API logs showing our slow calls:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-yaml data-lang=yaml><span class=nt>API.Queries.GetItemInfoQuery</span><span class=p>:</span><span class=w> </span><span class=l>Finished in 670ms </span><span class=w> </span><span class=c># First request to the API after startup</span><span class=w>
+</span><span class=w></span><span class=nt>API.Queries.GetItemInfoQuery</span><span class=p>:</span><span class=w> </span><span class=l>Finished in 180ms </span><span class=w> </span><span class=c># &#34;Slow&#34; requests</span><span class=w>
+</span><span class=w></span><span class=nt>API.Queries.GetItemInfoQuery</span><span class=p>:</span><span class=w> </span><span class=l>Finished in 180ms </span><span class=w> </span><span class=c># &#34;</span><span class=w>
+</span><span class=w></span><span class=nt>API.Queries.GetItemInfoQuery</span><span class=p>:</span><span class=w> </span><span class=l>Finished in 93ms  </span><span class=w> </span><span class=c># &#34;Fast&#34; requests</span><span class=w>
+</span><span class=w></span><span class=nt>API.Queries.GetItemInfoQuery</span><span class=p>:</span><span class=w> </span><span class=l>Finished in 92ms  </span><span class=w> </span><span class=c># &#34;</span><span class=w>
+</span><span class=w></span><span class=nt>API.Queries.GetItemInfoQuery</span><span class=p>:</span><span class=w> </span><span class=l>Finished in 92ms  </span><span class=w> </span><span class=c># &#34;</span><span class=w>
+</span></code></pre></div><p><code>GetItemInfoQuery</code> essentially retrieves a payload from DynamoDB using the
+<code>QueryAsync</code> method in the AWS SDK for .NET. Seeing this left us with a few
+questions:</p>
+<ul>
+<li>Why do the calls get faster?</li>
+<li>Why is the first call so slow? (we didn&rsquo;t end up investigating this)</li>
+</ul>
+<h2 id=investigation-1-profiling>Investigation #1: Profiling</h2>
+<p><a href=https://codeblog.dotsandbrackets.com/profiling-net-core-app-linux/ target=_blank rel="noopener noreferrer">See this post for a more in-depth look at generating flame graphs for .NET</a>
+.</p>
+<p>We decided to first create some flame graphs to profile the code. In hindsight
+this was a case of the <a href=https://en.wikipedia.org/wiki/Streetlight_effect target=_blank rel="noopener noreferrer">streetlight anti-method</a>
+, as I had recently been
+interested in flame graphs and stack traces after working with <code>pprof</code> to
+profile some Go programs. It was an interesting endeavor to do the same for a
+.NET program, but we didn&rsquo;t end up finding much out about this specific issue.</p>
+<p>First, we modified the API&rsquo;s Dockerfile to be built in debug mode (ie,
+<code>dotnet build -c Debug ...</code>), and added the following environment variable to
+the Docker Compose file:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh><span class=nv>COMPlus_PerfMapEnabled</span><span class=o>=</span><span class=m>1</span>
+</code></pre></div><p>This allowed us to use the Linux profiling tool <code>perf</code> to generate a report that
+we could later process into a flame graph. After launching the container and
+execing into it, we ran the following command to gather profiling data:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh><span class=c1># Install the necessary tooling (assumes a Debian environment)</span>
+apt update <span class=o>&amp;&amp;</span> apt install git linux-perf
+
+<span class=c1># Start perf and observe PID 1 until a ctrl-c is sent</span>
+perf record -p <span class=m>1</span> -g
+</code></pre></div><p>In our case, the <code>dotnet</code> program was running as PID 1. While <code>perf</code> was
+running, we issued some API calls via <code>curl</code> to our service to try and reproduce
+the issue. Once the issue had been seen, we sent a <code>ctrl-c</code> event <code>perf</code> which
+caused it to stop and dump its report to a file in the current directory called
+<code>perf.data</code>.</p>
+<p>We then ran the data file through Brendan Gregg&rsquo;s famed flame graph generation
+tool from within the running container:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-sh data-lang=sh><span class=c1># Clone the flame graph generator</span>
+git clone --depth<span class=o>=</span><span class=m>1</span> https://github.com/BrendanGregg/FlameGraph
+
+<span class=c1># Generate an interactive SVG from the perf data</span>
+perf script <span class=p>|</span> FlameGraph/stackcollapse-perf.pl <span class=p>|</span> FlameGraph/flamegraph.pl &gt; flamegraph.svg
+</code></pre></div><p>We ended up generating two flame graphs using this method - one for a single
+&ldquo;slow&rdquo; call, and one for a single &ldquo;fast&rdquo; call.</p>
+<p>The full flame graphs are quite large. Scoped down to just a search for
+<code>GetItemInfo</code>, we got the following graphs:</p>
+<span class=image-container><span class=link><a href=/images/GetItemInfo-flamegraph-slow.png target=_blank><img class=img src=/images/GetItemInfo-flamegraph-slow.png></a></span><span class=caption>
+<span class=title>Flame graph of a slow call</span class="image-container-caption">
+</span>
+</span>
+<span class=image-container><span class=link><a href=/images/GetItemInfo-flamegraph-fast.png target=_blank><img class=img src=/images/GetItemInfo-flamegraph-fast.png></a></span><span class=caption>
+<span class=title>Flame graph of a fast call</span class="image-container-caption">
+</span>
+</span>
+<p>While these graphs were definitely interesting, we weren&rsquo;t making much progress
+on finding out the root cause for our issue. We iced the flame graphs for the
+time being.</p>
+<h2 id=investigation-2-tracing>Investigation #2: Tracing</h2>
+<p><a href=https://www.mytechramblings.com/posts/getting-started-with-opentelemetry-and-dotnet-core/ target=_blank rel="noopener noreferrer">See this post for a more in-depth look at using OpenTelemetry and Jaegar with
+.NET</a>
+.</p>
+<p>We switched gears and started putting stopwatches in the code to hone in on
+where the slowness was coming from. Eventually we modified the code to include
+an OpenTelemetry tracing agent that sends to a local instance of Jaegar.</p>
+<p><code>Program.cs</code>:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-csharp data-lang=csharp><span class=c1>// *SNIP* imports...
+</span><span class=c1></span><span class=k>using</span> <span class=nn>OpenTelemetry</span><span class=p>;</span>
+<span class=k>using</span> <span class=nn>OpenTelemetry.Resources</span><span class=p>;</span>
+<span class=k>using</span> <span class=nn>OpenTelemetry.Trace</span><span class=p>;</span>
+
+<span class=kt>var</span> <span class=n>builder</span> <span class=p>=</span> <span class=n>WebApplication</span><span class=p>.</span><span class=n>CreateBuilder</span><span class=p>(</span><span class=n>args</span><span class=p>);</span>
+
+<span class=c1>// *SNIP* adding controllers, MediatR, etc...
+</span><span class=c1></span>
+<span class=n>builder</span><span class=p>.</span><span class=n>Services</span><span class=p>.</span><span class=n>AddOpenTelemetryTracing</span><span class=p>((</span><span class=n>builder</span><span class=p>)</span> <span class=p>=&gt;</span>
+<span class=p>{</span>
+  <span class=n>builder</span><span class=p>.</span><span class=n>AddAspNetCoreInstrumentation</span><span class=p>()</span>
+    <span class=p>.</span><span class=n>AddHttpClientInstrumentation</span><span class=p>()</span>
+    <span class=p>.</span><span class=n>SetResourceBuilder</span><span class=p>(</span><span class=n>ResourceBuilder</span><span class=p>.</span><span class=n>CreateDefault</span><span class=p>().</span><span class=n>AddService</span><span class=p>(</span><span class=s>&#34;API&#34;</span><span class=p>))</span>
+    <span class=p>.</span><span class=n>AddJaegerExporter</span><span class=p>(</span><span class=n>opts</span> <span class=p>=&gt;</span>
+    <span class=p>{</span>
+      <span class=n>opts</span><span class=p>.</span><span class=n>AgentHost</span> <span class=p>=</span> <span class=s>&#34;localhost&#34;</span><span class=p>;</span> <span class=c1>// FIXME hardcode
+</span><span class=c1></span>      <span class=n>opts</span><span class=p>.</span><span class=n>AgentPort</span> <span class=p>=</span> <span class=n>Convert</span><span class=p>.</span><span class=n>ToInt32</span><span class=p>(</span><span class=m>6831</span><span class=p>);</span> <span class=c1>// FIXME hardcode
+</span><span class=c1></span>      <span class=n>opts</span><span class=p>.</span><span class=n>ExportProcessorType</span> <span class=p>=</span> <span class=n>ExportProcessorType</span><span class=p>.</span><span class=n>Simple</span><span class=p>;</span>
+    <span class=p>});</span>
+<span class=p>});</span>
+
+<span class=c1>// *SNIP* the rest of Program.cs...
+</span></code></pre></div><p>After reproducing the issue again using <code>curl</code>, we got the following traces:</p>
+<span class=image-container><span class=link><a href=/images/GetItemInfo-trace-initial.png target=_blank><img class=img src=/images/GetItemInfo-trace-initial.png></a></span><span class=caption>
+<span class=title>Jaegar trace of the first call after startup</span class="image-container-caption">
+</span>
+</span>
+<p>First call to <code>GetItemInfo</code> after startup.</p>
+<p>This trace shows significant latency both before and after making a request to
+DynamoDB. We did not investigate further into this initial call as it&rsquo;s
+amortized. Pinning down the exact source of the initial call&rsquo;s latency could be
+an interesting future investigation.</p>
+<span class=image-container><span class=link><a href=/images/GetItemInfo-trace-slow.png target=_blank><img class=img src=/images/GetItemInfo-trace-slow.png></a></span><span class=caption>
+<span class=title>Jaegar trace of a slow call</span class="image-container-caption">
+</span>
+</span>
+<span class=image-container><span class=link><a href=/images/GetItemInfo-trace-fast.png target=_blank><img class=img src=/images/GetItemInfo-trace-fast.png></a></span><span class=caption>
+<span class=title>Jaegar trace of a fast call</span class="image-container-caption">
+</span>
+</span>
+<p>In both the slow and fast calls, we noticed that that virtually all of the
+latency occurs due to DynamoDB requests. In other words, the DynamoDB requests
+themselves are getting faster. We could not see what was happening in each of
+these DynamoDB calls, so we disabled TLS temporarily (this is purely a
+development instance by the way):</p>
+<p><code>appsettings.json</code>:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-json data-lang=json><span class=p>{</span>
+  <span class=nt>&#34;AWS&#34;</span><span class=p>:</span> <span class=p>{</span>
+    <span class=nt>&#34;UseHttp&#34;</span><span class=p>:</span> <span class=kc>true</span>
+  <span class=p>}</span>
+<span class=p>}</span>
+</code></pre></div><p>We then busted out Wireshark to snoop on the traffic and reproduced the issue
+again via <code>curl</code>. Here is a view of the sequence of HTTP calls that correspond
+to the logs in the beginning of this post:</p>
+<span class=image-container><span class=link><a href=/images/GetItemInfo-wireshark-http.png target=_blank><img class=img src=/images/GetItemInfo-wireshark-http.png></a></span><span class=caption>
+<span class=title>Wireshark capture of HTTP traffic to DynamoDB</span class="image-container-caption">
+</span>
+</span>
+<p>If we zoom in on only TCP stream index 15 and open up the query a bit to show
+all TCP packets (minus keepalives), we see the smoking gun.</p>
+<span class=image-container><span class=link><a href=/images/GetItemInfo-wireshark-tcp15.png target=_blank><img class=img src=/images/GetItemInfo-wireshark-tcp15.png></a></span><span class=caption>
+<span class=title>Wireshark capture of a TCP connection with DynamoDB</span class="image-container-caption">
+</span>
+</span>
+<p>When there are no existing TCP connections with DynamoDB, the AWS SDK needs to
+first establish one. If there <em>are</em> existing TCP connections, they can just be
+reused. When TCP connection establishment is taken into account, the DynmaoDB
+HTTP round trip times for the slow and fast calls match up perfectly with the
+timings we saw in our logs and traces. Root cause identified!</p>
+<h2 id=conclusion>Conclusion</h2>
+<p>Making a TCP connection with DynamoDB takes around ~100 ms, at least for this
+app at this point in time. This cost is paid on the first few calls to DynamoDB
+until the AWS SDK has a pool of open connections that are alive and ready to go.
+If no traffic happens on any of these connections for a while, they&rsquo;ll be torn
+down and the next call will again pay the cost of establishing a TCP connection.</p>
+<p>Additionally, at this time <a href=https://github.com/aws/aws-sdk-go/issues/2984 target=_blank rel="noopener noreferrer">DynamoDB does not support HTTP/2</a>
+. Many (most?)
+other AWS services do support HTTP/2. If it did, this behavior may be mitigated
+to some degree, as HTTP/2 can multiplex requests over a single TCP connection.</p>
+<p>All in all, if a service is seeing continuous load this whole issue should be
+virtually unnoticeable. It was an interesting investigation nonetheless, and
+could be applicable to some systems that see infrequent but latency-sensitive
+requests.</p>
+</article><section class="article labels"><a class=tag href=/tags/software/>software</a><a class=tag href=/tags/dotnet/>dotnet</a><a class=tag href=/tags/aws/>aws</a><a class=tag href=/tags/dynamodb/>dynamodb</a><a class=tag href=/tags/wireshark/>wireshark</a></section><section class="article author"><img class=avatar src=/img/profpic.jpg alt><p class=name>Pierce Bartine</p><div class=bio>All is waves — Schrödinger</div><div class=details><a class=item href=https://github.com/pbar1 target=_blank rel="noopener noreferrer"><span class="iconfont icon-github"></span>&nbsp;pbar1</a><a class=item href=https://hub.docker.com/u/pbar1 target=_blank rel="noopener noreferrer"><span class="iconfont icon-docker"></span>&nbsp;pbar1</a><a class=item href=https://twitter.com/pbar_ target=_blank rel="noopener noreferrer"><span class="iconfont icon-twitter"></span>&nbsp;@pbar_</a></div>
+</section>
+</div>
+<div class="article bottom"><section class="article navigation"><p><a class=link href=/posts/airpods-on-linux/><span class="iconfont icon-article"></span>Debugging AirPods on Linux</a></p></section><section class="article discussion"><script src=https://utteranc.es/client.js repo=pbar1/pbar.me issue-term=pathname label=utterances theme=preferred-color-scheme crossorigin=anonymous async></script></section></div></section><section id=footer><div class=footer-wrap>
+<p class=copyright>© 2021 Pierce Bartine</p>
+<p class=powerby><span>Powered&nbsp;by&nbsp;</span><a href=https://gohugo.io target=_blank rel="noopener noreferrer">Hugo</a><span>&nbsp;&&nbsp;</span><a href=https://themes.gohugo.io/hugo-notepadium/ target=_blank rel="noopener noreferrer">Notepadium</a></p></div>
+</section>
+<script type=application/javascript>var doNotTrack=!1;doNotTrack||(window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)},ga.l=+new Date,ga('create','UA-110140117-1','auto'),ga('send','pageview'))</script>
+<script async src=https://www.google-analytics.com/analytics.js></script>
+</body>
+</html>
